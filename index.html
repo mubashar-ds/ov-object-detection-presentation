@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open-Vocabulary Object Detection: Grounding DINO vs YOLO-World</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/white.css">
+    
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+            options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+
+    <style>
+        :root {
+            --itu-blue: #1565c0;
+            --deep-green: #2e7d32;
+            --alert-red: #c62828;
+            --accent-orange: #e65100;
+            --accent-purple: #4527a0;
+            --light-gray: #f8f9fa;
+            --text-dark: #263238;
+        }
+
+        .reveal {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text-dark);
+            font-size: 20px;
+        }
+        
+        .reveal h1, .reveal h2, .reveal h3 { 
+            color: var(--itu-blue); 
+            font-weight: 700; 
+            text-transform: none; 
+            margin: 0 0 15px 0;
+        }
+
+        .reveal .slides section {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-evenly !important;
+            height: 100%;
+            box-sizing: border-box;
+            padding: 25px 50px;
+        }
+        
+        .box {
+            padding: 10px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            text-align: left;
+            font-size: 0.82em;
+            line-height: 1.5;
+        }
+        .box-blue { background: #e3f2fd; border-left: 4px solid var(--itu-blue); }
+        .box-green { background: #e8f5e9; border-left: 4px solid var(--deep-green); }
+        .box-red { background: #fce4ec; border-left: 4px solid var(--alert-red); }
+        .box-orange { background: #fff3e0; border-left: 4px solid var(--accent-orange); }
+        .box-purple { background: #f3e5f5; border-left: 4px solid var(--accent-purple); }
+        .box-yellow { background: #fff8e1; border: 1px solid #ffc107; }
+        .box-gray { background: var(--light-gray); border-left: 4px solid #90a4ae; }
+
+        .row { display: flex; gap: 20px; margin-top: 10px; }
+        .col { flex: 1; min-width: 0; }
+        
+        .reveal table { 
+            margin: 10px auto 15px; 
+            border-collapse: collapse; 
+            font-size: 0.8em; 
+            width: 100%;
+        }
+        .reveal table th, .reveal table td { 
+            border: 1px solid #cfd8dc; 
+            padding: 8px 12px; 
+            text-align: left; 
+        }
+        .reveal table th { background: #eceff1; color: #37474f; font-weight: 600; }
+
+        .img-block-top {
+            text-align: center;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+        .img-block-top img {
+            max-width: 70%;
+            max-height: 280px; 
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+        .img-caption {
+            display: block;
+            font-size: 0.6em;
+            color: #78909c;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        .img-block-full {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1; /* Takes up all available space */
+            margin-bottom: 10px;
+        }
+        .img-block-full img {
+            max-width: 95%;
+            max-height: 65vh; 
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+
+        .title-slide {
+            justify-content: center !important;
+            text-align: center;
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 25px;
+        }
+        .logo-container img { width: 300px; }
+        .title-slide h1 { font-size: 1.6em; margin-bottom: 20px; color: #0d1b2a; }
+        .team-list { font-size: 0.75em; color: #546e7a; line-height: 1.7; }
+        .course-info { font-size: 0.7em; color: #78909c; margin-top: 20px; border-top: 1px solid #cfd8dc; padding-top: 15px; }
+
+        .highlight { color: var(--itu-blue); font-weight: bold; }
+        .highlight-green { color: var(--deep-green); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="reveal">
+    <div class="slides">
+
+        <section class="title-slide">
+            <div class="logo-container">
+                <img src="assets/itu_logo.jpg" alt="ITU Logo">
+            </div>
+            <h1>Open-Vocabulary Object Detection:<br>Grounding DINO vs YOLO-World</h1>
+            <div class="team-list">
+                <strong>Marriam Rasib</strong> — MSDS24027 &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Mubashar Hussain</strong> — MSDS24031<br>
+                <strong>Saeed Anwer</strong> — MSDS24056 &nbsp;&nbsp;|&nbsp;&nbsp; <strong>Syed Ali Raza</strong> — MSDS24062<br>
+                <strong>Zaheer Ul Din</strong> — MSDS24073
+            </div>
+            <div class="course-info">
+                Deep Learning | Instructor: Dr. Mohsin Ali
+            </div>
+        </section>
+
+        <!-- problem statement -->
+        <section>
+            <h2>Problem Formulation & Motivation</h2>
+            <div class="img-block-top">
+                <img src="assets/clip.png" alt="CLIP Alignment Gap">
+                <span class="img-caption">Fig 1: CLIP learns global image–text alignment but does not provide spatial localization.</span>
+            </div>
+            <div class="box box-blue">
+                <strong>Closed-Set:</strong> $f(I) \rightarrow \{(b_i, c_i)\}, \quad c_i \in \mathcal{C}_{\text{fixed}}$ — Constrained to training classes.
+            </div>
+            <div class="box box-green">
+                <strong>Open-Vocabulary:</strong> $f(I, T) \rightarrow \{(b_i, t_j)\}$ — Localize arbitrary free-form text at inference.
+            </div>
+            <div class="row">
+                <div class="col">
+                    <div class="box box-orange" style="height: 100%; margin-bottom: 0;">
+                        <strong>Core Challenges</strong><br>
+                        1. Semantic-Spatial Alignment<br>
+                        2. Zero-Shot Generalization<br>
+                        3. Accuracy Preservation
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-red" style="height: 100%; margin-bottom: 0;">
+                        <strong>Prior Limitations</strong><br>
+                        • <strong>YOLO:</strong> Fixed classifier<br>
+                        • <strong>CLIP:</strong> No spatial localization<br>
+                        • <strong>DETR:</strong> No language grounding
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- research landscape-->
+        <section>
+            <h2>Research Landscape</h2>
+            <div class="box box-gray">
+                <strong>Unifying Principle:</strong> $\text{OVD} = \underbrace{\text{Region Localization}}_{\text{"Where?"}} + \underbrace{\text{Language Alignment}}_{\text{"What?"}}$ — The critical decision is <strong>when/how</strong> these streams interact.
+            </div>
+            <div class="row">
+                <div class="col">
+                    <div class="box box-blue" style="border-top: 4px solid var(--itu-blue); height: 100%;">
+                        <strong>Early / Deep Fusion</strong><br>
+                        <em>Grounding DINO</em> (Liu et al., 2023)<br><br>
+                        • Language injected <em>throughout</em> pipeline<br>
+                        • Cross-attention at multiple stages<br>
+                        • Jointly learned end-to-end<br><br>
+                        <em>Philosophy: Language as a first-class citizen</em>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-green" style="border-top: 4px solid var(--deep-green); height: 100%;">
+                        <strong>Late / Efficient Fusion</strong><br>
+                        <em>YOLO-World</em> (Cheng et al., 2024)<br><br>
+                        • Text embeddings pre-computed <em>offline</em><br>
+                        • lightweight vision-language interaction<br>
+                        • Final matching via dot-product<br><br>
+                        <em>Philosophy: Language as a lookup index</em>
+                    </div>
+                </div>
+            </div>
+            <div class="box box-yellow" style="text-align: center;">
+                <strong>Fundamental Trade-off:</strong> &nbsp; Representation Power &nbsp; $\longleftrightarrow$ &nbsp; Inference Efficiency
+            </div>
+        </section>
+
+        <!-- grounding dino architecture -->
+        <section>
+            <h2>Grounding DINO Architecture</h2>
+            <div class="box box-gray">
+                Built on <strong>DINO</strong> (improved DETR with denoising training and anchor refinement), retrofitted with grounded pre-training for open-set detection.
+            </div>
+            <table>
+                <tr><th>Stage</th><th>Component</th><th>Role</th></tr>
+                <tr><td>1</td><td>Image Backbone (Swin-T)</td><td>Multi-scale visual features $\mathbf{F}_v$</td></tr>
+                <tr><td>2</td><td>Text Encoder (CLIP / VL)</td><td>Token-level text features $\mathbf{F}_t$</td></tr>
+                <tr><td>3</td><td>Feature Enhancer</td><td>Deep vision-language fusion</td></tr>
+                <tr><td>4</td><td>Language-Aware Query Sel.</td><td>Text-guided initial queries $\mathbf{Q}_0$</td></tr>
+                <tr><td>5</td><td>Decoder (6 layers)</td><td>Iterative object refinement</td></tr>
+                <tr><td>6</td><td>Grounding Head</td><td>Box prediction + similarity scores</td></tr>
+            </table>
+            <div class="box box-blue" style="margin-bottom: 0;">
+                <strong>Key Insight:</strong> Language information is integrated at multiple stages (feature enhancement, query initialization, and decoder refinement), enabling consistent multimodal alignment throughout the pipeline.
+            </div>
+        </section>
+
+        <!-- grounding dino architecture -->
+        <section>
+            <h2>Grounding DINO: Visual Pipeline</h2>
+            <div class="img-block-full">
+                <img src="assets/gd_arch.png" alt="Grounding DINO Architecture Diagram">
+            </div>
+            <span class="img-caption" style="text-align: center;">Figure 2: End-to-end architecture illustrating feature enhancement, language-aware query selection, and cross-modal decoding.</span>
+        </section>
+
+        <!-- multimodal fusion -->
+        <section>
+            <h2>Multimodal Fusion (Cross-Attention)</h2>
+            <div class="box box-gray">
+                The <strong>Feature Enhancer</strong> performs cross-modal <em>deformable</em> attention between visual and textual features:
+                $$\text{DeformAttn}(\mathbf{Q}, \mathbf{K}, \mathbf{V}) = \sum_{k \in \text{sampled points}} \mathbf{A}_k \cdot \mathbf{V}_k$$             </div>
+            <div class="box box-orange">
+                <strong>Why Sparse Sampling?</strong> Instead of attending to all spatial positions, it samples only $K$ learned reference points, reducing complexity and making cross-modal attention tractable over high-res maps.
+            </div>
+            <div class="row">
+                <div class="col">
+                    <div class="box box-blue" style="text-align: center;">
+                        <strong>Image $\rightarrow$ Text</strong><br>
+                        $\mathbf{F}'_v = \text{DeformAttn}(\mathbf{F}_v, \mathbf{F}_t, \mathbf{F}_t)$<br>
+                        <em>"What words describe this region?"</em>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-green" style="text-align: center;">
+                        <strong>Text $\rightarrow$ Image</strong><br>
+                        $\mathbf{F}'_t = \text{DeformAttn}(\mathbf{F}_t, \mathbf{F}_v, \mathbf{F}_v)$<br>
+                        <em>"Where are the words grounded?"</em>
+                    </div>
+                </div>
+            </div>
+            <div class="box box-purple" style="margin-top: 10px;">
+                <strong>Key Insight:</strong> $\mathbf{F}_v \leftrightarrow{\text{CrossAttn}} \mathbf{F}_t \rightarrow \mathbf{F}_{\text{aligned}}$. Language is structurally injected into the visual representation.
+            </div>
+        </section>
+
+        <!-- object queries -->
+        <section>
+            <h2>Object Queries & Detection Mechanism</h2>
+            <div class="box box-gray">
+                Inherits <strong>query-based detection</strong> from DETR. A fixed set of learned queries is iteratively refined.
+            </div>
+            <div class="box box-blue">
+                <strong>Language-Aware Query Selection:</strong> Initial queries are selected by choosing the <strong>Top-K candidate regions</strong> with the highest region-text similarity.
+            </div>
+            <div class="box box-green">
+                <strong>Iterative Refinement:</strong> $\mathbf{q}_i^{(l+1)} = \text{DecoderLayer}(\mathbf{q}_i^{(l)}, \mathbf{F}_{\text{aligned}})$                 <ol style="font-size: 0.9em; margin: 5px 0;">
+                    <li><strong>Self-Attention</strong> among queries (suppresses duplicates)</li>
+                    <li><strong>Cross-Attention</strong> to fused features (refines semantics/spatial)</li>
+                </ol>
+            </div>
+            <div class="row" style="margin-top: 10px;">
+                <div class="col">
+                    <div class="box box-yellow" style="height: 100%;">
+                        <strong>Properties</strong><br>
+                        • Each query is encouraged to represent a single object<br>
+                        • Global attention (no receptive field limits)<br>
+                        • Set-based prediction reduces reliance on heuristic NMS
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-orange" style="height: 100%;">
+                        <strong>Conceptual Shift</strong><br>
+                        Traditional: "Classify each anchor"<br>
+                        Grounding DINO: "Predict objects described by text" $\rightarrow$ Open output space.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- grounding head and loss -->
+        <section>
+            <h2>Grounding Head & Training Objective</h2>
+            <div class="box box-gray">
+                The head converts refined queries into boxes and <strong>region-text similarity scores</strong> (replacing fixed class logits with region–text similarity scores) via dot product in the shared embedding space.
+            </div>
+            <div class="box box-blue">
+                <strong>Composite Loss:</strong> &nbsp; $\mathcal{L} = \lambda_{\text{bbox}} \mathcal{L}_{\text{bbox}} + \lambda_{\text{GIoU}} \mathcal{L}_{\text{GIoU}} + \lambda_{\text{align}} \mathcal{L}_{\text{align}}$             </div>
+            <table>
+                <tr><th>Loss Component</th><th>Purpose</th></tr>
+                <tr><td>$\mathcal{L}_{\text{bbox}}$ (L1)</td><td>Absolute coordinate regression</td></tr>
+                <tr><td>$\mathcal{L}_{\text{GIoU}}$</td><td>Shape-aware box overlap optimization</td></tr>
+                <tr><td>$\mathcal{L}_{\text{align}}$ (Contrastive)</td><td>Pull matched region-text pairs, push negatives (CLIP-style)</td></tr>
+            </table>
+            <div class="box box-purple">
+                <strong>Key Insight:</strong> Detection becomes <em>region-text contrastive learning</em>. After Hungarian matching, the contrastive loss enables generalization to unseen text queries at inference.
+            </div>
+        </section>
+
+        <!-- yolo world architecture -->
+        <section>
+            <h2>YOLO-World Architecture</h2>
+            <div class="box box-gray">
+                <strong>YOLO-World</strong> (Cheng et al., 2024) retrofits the YOLO framework with vision-language capabilities while strictly preserving real-time inference speeds.
+            </div>
+            <table>
+                <tr><th>Stage</th><th>Component</th><th>Role</th></tr>
+                <tr><td>1</td><td>CSPDarknet Backbone</td><td>Hierarchical visual features $\{\mathbf{P}_3, \mathbf{P}_4, \mathbf{P}_5\}$</td></tr>
+                <tr><td>2</td><td><strong>RepVL-PAN</strong></td><td>Lightweight vision-language interaction (reparameterized into conv at inference)</td></tr>
+                <tr><td>3</td><td>Detection Head</td><td>Box, objectness, region embedding $\mathbf{z}_i$</td></tr>
+                <tr><td>4</td><td>CLIP Text Encoder</td><td>Text embeddings $\{\mathbf{t}_j\}$ (Precomputed offline for inference)</td></tr>
+            </table>
+            <div class="box box-green" style="margin-bottom: 0;">
+                <strong>Key Insight:</strong> Decoupling language from the detection network enables <em>constant-time scaling</em> with vocabulary size at inference.
+            </div>
+        </section>
+
+        <!-- yolo world architecture -->
+        <section>
+            <h2>YOLO-World: Visual Pipeline</h2>
+            <div class="img-block-full">
+                <img src="assets/yolo_arch.png" alt="YOLO-World Architecture Diagram">
+            </div>
+            <span class="img-caption" style="text-align: center;">Figure 4: YOLO-World pipeline showing RepVL-PAN feature aggregation and embedding-based region–text matching with offline vocabulary.</span>
+        </section>
+
+        <!-- detection head reformulation -->
+        <section>
+            <h2>Detection Head Reformulation</h2>
+            <div class="box box-gray">
+                The critical change: <strong>replacement of fixed classifier weights</strong>, with embedding-based matching.
+            </div>
+            <div class="row">
+                <div class="col">
+                    <div class="box box-red" style="text-align: center;">
+                        <strong>Traditional YOLO (Closed-Set)</strong><br><br>
+                        $P(c \mid \mathbf{z}) = \text{softmax}(\mathbf{W}\mathbf{z}) \in \mathbb{R}^C$<br><br>
+                        $\mathbf{f}_i \xrightarrow{\mathbf{W}} \mathbb{R}^C \xrightarrow{\text{softmax}} P(c)$<br><br>
+                        <em>Fixed weight matrix $\rightarrow$ Fixed classes</em>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-green" style="text-align: center;">
+                        <strong>YOLO-World (Open-Vocab)</strong><br><br>
+                        $S_{i,j} = \mathbf{z}_i \cdot \mathbf{t}_j$<br><br>
+                        $\mathbf{f}_i \xrightarrow{\text{Proj}} \mathbb{R}^D \xrightarrow{\cdot \mathbf{t}_j} S_{i,j}$<br><br>
+                        <em>Embedding projection $\rightarrow$ Any class</em>
+                    </div>
+                </div>
+            </div>
+            <div class="box box-purple" style="margin-top: 15px;">
+                <strong>Why This Works:</strong> During training, contrastive loss maps region embeddings to the CLIP space. At inference, CLIP text embeddings can be computed (typically precomputed) for arbitrary text queries.
+            </div>
+        </section>
+
+        <!-- offline vocablary -->
+        <section>
+            <h2>Offline Vocabulary & Efficiency</h2>
+            <div class="box box-gray">
+                The most consequential design decision: <strong>decoupling text encoding from the inference loop.</strong>
+                $$\mathbf{t}_j = \text{CLIP}_{\text{text}}(\text{"category } j\text{"}) \quad \longleftarrow \quad \text{Computed once, stored as lookup table}$$             </div>
+            <table>
+                <tr><th>Advantage</th><th>Explanation</th></tr>
+                <tr><td>Zero text encoding cost</td><td>No CLIP forward pass at runtime</td></tr>
+                <tr><td>True real-time speed</td><td>YOLO-World-L: 52 FPS | YOLO-World-S: 74 FPS (T4)</td></tr>
+                <tr><td>Scalable vocabulary</td><td>Pre-compute 10 or 10,000 categories — cost stays constant</td></tr>
+                <tr><td>Edge-friendly</td><td>Smaller model, No heavy transformer modules at inference</td></tr>
+            </table>
+            <div class="box box-yellow" style="text-align: center;">
+                <strong>Complexity Reduction:</strong> &nbsp; $\underbrace{O(N^2)}_{\text{Grounding DINO}} \quad \longrightarrow \quad \underbrace{O(N \cdot D)}_{\text{YOLO-World}}$             </div>
+            <div class="box box-purple" style="font-size: 0.85em;">
+                <strong>Note:</strong> During <em>training</em>, the CLIP text encoder is active. The offline strategy primarily applied at inference for efficiency.
+            </div>
+        </section>
+
+        <!-- inference pipeline -->
+        <section>
+            <h2>Inference Pipeline</h2>
+            <div style="text-align: left;">
+                <div class="box box-blue" style="margin-bottom: 10px;">
+                    <strong>Step 1: Feature Extraction</strong> &nbsp; $I \xrightarrow{\text{CSPDarknet}} \{\mathbf{P}_3, \mathbf{P}_4, \mathbf{P}_5\}$                 </div>
+                <div class="box box-green" style="margin-bottom: 10px;">
+                    <strong>Step 2: Enhancement</strong> &nbsp; $\{\mathbf{P}_3..\mathbf{P}_5\} \xrightarrow{\text{RepVL-PAN}} \{\hat{\mathbf{P}}_3..\hat{\mathbf{P}}_5\}$ (cross-modal layers are reparameterized as conv operations at inference)
+                </div>
+                <div class="box box-gray" style="margin-bottom: 10px;">
+                    <strong>Step 3: Region Embedding</strong> &nbsp; $\hat{\mathbf{P}}_s \xrightarrow{\text{Head}} \{\mathbf{z}_i\}_{i=1}^{N} \in \mathbb{R}^{512}$                 </div>
+                <div class="box box-orange" style="margin-bottom: 10px;">
+                    <strong>Step 4: Retrieval</strong> &nbsp; $\mathbf{S} = \mathbf{Z}\mathbf{T}^T \in \mathbb{R}^{N_{\text{anchors}} \times |\mathcal{V}|}$ (Matrix multiplication)
+                </div>
+                <div class="box box-red" style="margin-bottom: 0;">
+                    <strong>Step 5 & 6: Scoring & NMS</strong> &nbsp; $\text{Score}_{i,j} = p_{\text{obj},i} \times S_{i,j} \rightarrow$ Standard NMS
+                </div>
+            </div>
+            <div class="box box-purple" style="text-align: center; margin-top: 12px;">
+                <strong>Interpretation:</strong> Detection = Dense Region Proposal $\longrightarrow$ Embedding Retrieval
+            </div>
+        </section>
+
+        <!-- deep comparison -->
+        <section>
+            <h2>Deep Comparison</h2>
+            <table>
+                <tr><th>Dimension</th><th>Grounding DINO</th><th>YOLO-World</th></tr>
+                <tr><td><strong>Fusion Strategy</strong></td><td>Deep (Enhancer + Query + Decoder)</td><td>Moderate (RepVL-PAN) + Offline</td></tr>
+                <tr><td><strong>Detection Paradigm</strong></td><td>Query-based (DETR)</td><td>Grid/Anchor-based (YOLO)</td></tr>
+                <tr><td><strong>Language Role</strong></td><td>Pervasive (shapes features)</td><td>Guiding (modulates PAN)</td></tr>
+                <tr><td><strong>Reasoning</strong></td><td>Strong cross-modal reasoning</td><td>Limited cross-modal interaction</td></tr>
+                <tr><td><strong>COCO Zero-Shot (reported)</strong></td><td><span class="highlight">52.5 AP</span></td><td>35.4 AP (L)</td></tr>
+                <tr><td><strong>Speed</strong></td><td>~10 FPS (A100)</td><td><span class="highlight-green">52–74 FPS (T4)</span></td></tr>
+                <tr><td><strong>Complexity</strong></td><td>Quadratic attention</td><td>Linear embedding matching</td></tr>
+                <tr><td><strong>Edge Deployment</strong></td><td>Not feasible</td><td>Feasible (S variant)</td></tr>
+            </table>
+            <div class="row" style="margin-top: 15px;">
+                <div class="col">
+                    <div class="box box-blue" style="height: 100%;">
+                        <strong>GD Philosophy:</strong> "Learn a unified representation where vision and language are inseparable."
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-green" style="height: 100%;">
+                        <strong>YW Philosophy:</strong> "Detect first, retrieve labels later." Prioritize deployment readiness.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- emerging directions -->
+        <section>
+            <h2>Research Evolution & Emerging Directions</h2>
+            <div class="row">
+                <div class="col">
+                    <div class="box box-blue" style="border-top: 4px solid var(--itu-blue); height: 100%;">
+                        <strong>Post-Grounding DINO</strong><br><br>
+                        • <strong>GD 1.5 (2024):</strong> Improved data scaling<br>
+                        • <strong>Detection $\rightarrow$ Segmentation:</strong> Integration with SAM<br>
+                        • <strong>Grounded Generation:</strong> Spatial control for diffusion
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box box-green" style="border-top: 4px solid var(--deep-green); height: 100%;">
+                        <strong>Post-YOLO-World</strong><br><br>
+                        • <strong>YW v2 (2024):</strong> Better pre-training strategies<br>
+                        • <strong>Scalable Systems:</strong> Multi-GPU video analytics<br>
+                        • <strong>Edge Deployment:</strong> ONNX/TensorRT variants
+                    </div>
+                </div>
+            </div>
+            <div class="box box-purple" style="text-align: center; margin-top: 15px;">
+                <strong>Converging Trajectory:</strong> &nbsp; Detection $\longrightarrow$ Grounding $\longrightarrow$ Reasoning $\longrightarrow$ Action
+            </div>
+            <div class="box box-yellow" style="margin-top: 10px;">
+                <strong>Open Questions:</strong> Can we achieve GD accuracy at YW speed? How to handle compositional queries efficiently? Will specialized OVD models survive, or will generalist multimodal models subsume them?
+            </div>
+        </section>
+
+        <!-- conclusion -->
+        <section data-background-color="#0d1b2a" data-background-transition="zoom">
+            <h2 style="color: #90caf9; margin-bottom: 20px;">Conclusion</h2>
+            
+            <div style="background: rgba(255,255,255,0.08); border-left: 4px solid #64b5f6; padding: 15px 20px; border-radius: 6px; color: white;">
+                $$\text{Object Detection} = \text{Semantic Alignment Between Spatial Regions and Language}$$                 <div style="margin-top: 10px; font-size: 0.9em; color: #b0bec5;">
+                    The distinction is whether <strong style="color: #fff;">language shapes the visual representation itself</strong> (Grounding DINO) or <strong style="color: #fff;">serves as a retrieval interface</strong> over fixed visual representations (YOLO-World).
+                </div>
+            </div>
+
+            <div class="row" style="margin-top: 20px;">
+                <div class="col">
+                    <div style="background: rgba(33, 150, 243, 0.15); border: 1px solid rgba(33, 150, 243, 0.3); padding: 15px; border-radius: 6px; color: white; height: 100%;">
+                        <strong style="color: #64b5f6;">Grounding DINO</strong><br>
+                        (Representation-Driven)<br><br>
+                        • Language architecturally embedded<br>
+                        • Sets the accuracy ceiling<br>
+                        • Cost: Speed & scalability
+                    </div>
+                </div>
+                <div class="col">
+                    <div style="background: rgba(76, 175, 80, 0.15); border: 1px solid rgba(76, 175, 80, 0.3); padding: 15px; border-radius: 6px; color: white; height: 100%;">
+                        <strong style="color: #81c784;">YOLO-World</strong><br>
+                        (Efficiency-Driven)<br><br>
+                        • Language as retrieval index<br>
+                        • Sets the efficiency ceiling<br>
+                        • Cost: Reasoning depth
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 25px; font-size: 0.7em; color: #78909c; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <strong>References:</strong><br><br>
+                Liu et al., "Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection," arXiv 2023<br>
+                Cheng et al., "YOLO-World: Real-Time Open-Vocabulary Object Detection," arXiv 2024
+            </div>
+        </section>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"></script>
+<script>
+    Reveal.initialize({
+        controls: true,
+        progress: true,
+        center: true, 
+        hash: true,
+        transition: 'slide',
+        width: 1200,
+        height: 750,
+        margin: 0.04,
+        math: {
+            mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+        }
+    });
+</script>
+
+</body>
+</html>
